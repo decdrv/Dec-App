@@ -1,7 +1,10 @@
 package com.dec.app
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Path
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -33,7 +36,6 @@ class DecOmniService : AccessibilityService() {
                 if (textBoxes.isNotEmpty()) {
                     val textBox = textBoxes[0]
                     
-                    // Self-Healing: अगर Box Active नहीं है, तो पहले Click करो
                     if (!textBox.isFocused) {
                         textBox.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }
@@ -45,35 +47,52 @@ class DecOmniService : AccessibilityService() {
                     )
                     textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
                     
-                    Toast.makeText(this, "Dec: Typed!", Toast.LENGTH_SHORT).show()
-                    automationStep = 2 // अब Send बटन ढूंढने जाओ
+                    Toast.makeText(this, "Dec: Typed! Waiting for UI...", Toast.LENGTH_SHORT).show()
+                    automationStep = 2 
+                    
+                    // STEP 2: 1.5 सेकंड रुको (ताकि Keyboard पूरी तरह खुल जाए) और फिर Sniper Shot मारो!
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        fireSniperShot()
+                    }, 1500)
                 }
-            }
-            
-            // STEP 2: X-Ray Data से मिला असली Send बटन दबाओ
-            else if (automationStep == 2) {
-                // Dynamic Wait: 1 सेकंड रुको ताकि Send बटन Screen पर आ जाए
-                Handler(Looper.getMainLooper()).postDelayed({
-                    val currentRoot = rootInActiveWindow
-                    if (currentRoot != null) {
-                        // X-Ray Data: Desc: 'Send'
-                        val sendBtn = findNodeByDescription(currentRoot, "Send")
-                        
-                        if (sendBtn != null && sendBtn.isClickable) {
-                            sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                            Toast.makeText(this, "Dec: CLICKED SEND! 🚀", Toast.LENGTH_LONG).show()
-                            
-                            // Mission Accomplished! 
-                            automationStep = 0
-                            isAutomating = false
-                        }
-                    }
-                }, 1000) 
             }
         }
     }
 
-    // Helper 1: Class के नाम से ढूंढना (Typing Box के लिए)
+    // THE PERMANENT FIX: Physical Screen Tap (Gesture Dispatch)
+    private fun fireSniperShot() {
+        val currentRoot = rootInActiveWindow
+        if (currentRoot != null) {
+            val sendBtn = findNodeByDescription(currentRoot, "Send")
+            
+            if (sendBtn != null) {
+                // बटन की असली X, Y Location निकालो
+                val rect = Rect()
+                sendBtn.getBoundsInScreen(rect)
+                
+                // Screen पर बिल्कुल बीचों-बीच (Center) निशाना लगाओ
+                val x = rect.centerX().toFloat()
+                val y = rect.centerY().toFloat()
+                
+                val path = Path()
+                path.moveTo(x, y)
+                
+                // असली उंगली की तरह Tap करो (100 milliseconds का प्रहार)
+                val gesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
+                    .build()
+                    
+                dispatchGesture(gesture, null, null)
+                Toast.makeText(this, "Dec: SNIPER SHOT FIRED! 🎯", Toast.LENGTH_LONG).show()
+                
+                automationStep = 0
+                isAutomating = false
+            } else {
+                Toast.makeText(this, "Dec: Send button not found!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun findNodesByClass(root: AccessibilityNodeInfo, className: String): List<AccessibilityNodeInfo> {
         val result = mutableListOf<AccessibilityNodeInfo>()
         if (root.className?.toString()?.contains(className) == true) {
@@ -88,7 +107,6 @@ class DecOmniService : AccessibilityService() {
         return result
     }
 
-    // Helper 2: X-Ray Data वाला Description Search (Send बटन के लिए)
     private fun findNodeByDescription(root: AccessibilityNodeInfo, desc: String): AccessibilityNodeInfo? {
         if (root.contentDescription?.toString()?.equals(desc, ignoreCase = true) == true) {
             return root
@@ -108,7 +126,6 @@ class DecOmniService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val currentTime = System.currentTimeMillis()
 
-        // EMERGENCY STOP (Volume Down x3)
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
             if (currentTime - lastVolumeDownTime < 1000) volumeDownCount++ else volumeDownCount = 1
             lastVolumeDownTime = currentTime
@@ -121,7 +138,6 @@ class DecOmniService : AccessibilityService() {
             }
         }
 
-        // START AUTOMATION (Volume Up x2)
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP && event.action == KeyEvent.ACTION_DOWN) {
             if (currentTime - lastVolumeUpTime < 1000) volumeUpCount++ else volumeUpCount = 1
             lastVolumeUpTime = currentTime
