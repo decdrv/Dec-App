@@ -4,6 +4,11 @@
     
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- THE X-RAY GLASSES: This allows Dec to see the Claude App -->
+    <queries>
+        <package android:name="com.anthropic.claude" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="Dec"
@@ -16,7 +21,6 @@
             </intent-filter>
         </activity>
 
-        <!-- THE NEW OMNI-ENGINE SERVICE -->
         <service
             android:name=".DecOmniService"
             android:exported="true"
