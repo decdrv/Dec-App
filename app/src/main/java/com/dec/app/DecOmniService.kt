@@ -42,35 +42,52 @@ class DecOmniService : AccessibilityService() {
                     
                     Toast.makeText(this, "Dec: Typed the question!", Toast.LENGTH_SHORT).show()
                     
-                    // Type करने के बाद Step 2 पर जाओ
                     automationStep = 2
                 }
             }
             
-            // STEP 2: Send बटन ढूंढो और Click करो
+            // STEP 2: Smart Send Button Search
             else if (automationStep == 2) {
-                // थोड़ा सा इंतज़ार करो ताकि App Send बटन को screen पर दिखा सके
+                // 1.5 सेकंड का इंतज़ार ताकि Send बटन Active हो जाए
                 Handler(Looper.getMainLooper()).postDelayed({
                     val currentRoot = rootInActiveWindow
                     if (currentRoot != null) {
-                        // Send बटन ढूंढने की कोशिश (Clickable ImageViews या Buttons)
-                        val sendButton = findSendButton(currentRoot)
+                        var clicked = false
                         
-                        if (sendButton != null) {
-                            sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        // Strategy A: Typing Box के बगल वाला बटन ढूंढो
+                        val textBoxes = findNodesByClass(currentRoot, "android.widget.EditText")
+                        if (textBoxes.isNotEmpty()) {
+                            val sendBtn = findSiblingButton(textBoxes[0])
+                            if (sendBtn != null) {
+                                sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                clicked = true
+                            }
+                        }
+                        
+                        // Strategy B: अगर बगल में नहीं मिला, तो नाम से ढूंढो
+                        if (!clicked) {
+                            val fallbackBtn = findSendButtonByText(currentRoot)
+                            if (fallbackBtn != null) {
+                                fallbackBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                                clicked = true
+                            }
+                        }
+                        
+                        if (clicked) {
                             Toast.makeText(this, "Dec: Clicked SEND!", Toast.LENGTH_SHORT).show()
-                            
-                            // काम पूरा हो गया, अब रुक जाओ
                             automationStep = 0
                             isAutomating = false
+                        } else {
+                            Toast.makeText(this, "Dec: Send button is hiding!", Toast.LENGTH_LONG).show()
+                            // अगर नहीं मिला, तो वापस Step 2 पर ही रहो ताकि दोबारा कोशिश कर सके
                         }
                     }
-                }, 1000) // 1 सेकंड का इंतज़ार
+                }, 1500) 
             }
         }
     }
 
-    // Helper 1: Class के नाम से ढूंढना (Typing Box के लिए)
+    // Helper 1: Class के नाम से ढूंढना
     private fun findNodesByClass(root: AccessibilityNodeInfo, className: String): List<AccessibilityNodeInfo> {
         val result = mutableListOf<AccessibilityNodeInfo>()
         if (root.className?.toString()?.contains(className) == true) {
@@ -85,24 +102,41 @@ class DecOmniService : AccessibilityService() {
         return result
     }
 
-    // Helper 2: Send बटन ढूंढना (यह बहुत Smart तरीका है)
-    private fun findSendButton(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        // Chat apps में Send बटन अक्सर एक Clickable ImageView या Button होता है
+    // Helper 2: Smart Sibling Search (Typing Box के बगल वाला बटन)
+    private fun findSiblingButton(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        var parent = node.parent
+        var depth = 0
+        // 3 level ऊपर तक जाकर चेक करो
+        while (parent != null && depth < 3) {
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChild(i)
+                // अगर कोई चीज़ Clickable है, और वह Typing Box नहीं है
+                if (child != null && child.isClickable && child != node) {
+                    val className = child.className?.toString() ?: ""
+                    // अगर वह Image या Button है, तो 99% वही Send बटन है!
+                    if (className.contains("Image") || className.contains("Button")) {
+                        return child
+                    }
+                }
+            }
+            parent = parent.parent
+            depth++
+        }
+        return null
+    }
+
+    // Helper 3: Fallback Search
+    private fun findSendButtonByText(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (root.isClickable) {
-            val className = root.className?.toString() ?: ""
-            val contentDesc = root.contentDescription?.toString()?.lowercase() ?: ""
-            
-            // अगर बटन का नाम 'send' है, या वह एक Clickable Image है (जो EditText नहीं है)
-            if (contentDesc.contains("send") || 
-               (className.contains("ImageView") || className.contains("Button"))) {
+            val desc = root.contentDescription?.toString()?.lowercase() ?: ""
+            if (desc.contains("send") || desc.contains("submit") || desc.contains("message")) {
                 return root
             }
         }
-        
         for (i in 0 until root.childCount) {
             val child = root.getChild(i)
             if (child != null) {
-                val found = findSendButton(child)
+                val found = findSendButtonByText(child)
                 if (found != null) return found
             }
         }
@@ -114,7 +148,6 @@ class DecOmniService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val currentTime = System.currentTimeMillis()
 
-        // KILL SWITCH: Volume Down (3 बार)
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
             if (currentTime - lastVolumeDownTime < 1000) volumeDownCount++ else volumeDownCount = 1
             lastVolumeDownTime = currentTime
@@ -127,7 +160,6 @@ class DecOmniService : AccessibilityService() {
             }
         }
 
-        // START AUTOMATION: Volume Up (2 बार)
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP && event.action == KeyEvent.ACTION_DOWN) {
             if (currentTime - lastVolumeUpTime < 1000) volumeUpCount++ else volumeUpCount = 1
             lastVolumeUpTime = currentTime
