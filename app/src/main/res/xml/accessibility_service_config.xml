@@ -5,5 +5,4 @@
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews|flagRequestFilterKeyEvents"
     android:canRetrieveWindowContent="true"
     android:canPerformGestures="true"
-    android:notificationTimeout="10"
-    android:description="Dec Omni-Engine: Extreme Automation and Screen Control" />
+    android:notificationTimeout="10" />
