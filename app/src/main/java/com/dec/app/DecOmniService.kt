@@ -19,6 +19,8 @@ class DecOmniService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // Force create both files as soon as Dec starts!
+        getBrainDirectory()
         Toast.makeText(this, "🟢 DEC BRAIN ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
     }
 
@@ -39,16 +41,18 @@ class DecOmniService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
-    // 📂 NEW: Creates a visible folder in Documents
+    // 📂 DIRECTORY & FILE INITIALIZATION
     private fun getBrainDirectory(): File {
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DecBrain")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
+        if (!dir.exists()) dir.mkdirs()
+
+        // Force create knowledge file so it's always visible to you
+        val memFile = File(dir, "dec_knowledge.txt")
+        if (!memFile.exists()) memFile.writeText("--- DEC KNOWLEDGE VAULT ---\n")
+
         return dir
     }
 
-    // 🧠 MEMORY SYSTEM: Get Next Question
     private fun getNextQuestion(): String {
         try {
             val dir = getBrainDirectory()
@@ -65,7 +69,6 @@ class DecOmniService : AccessibilityService() {
             val currentIndex = prefs.getInt("q_index", 0)
             
             val question = lines[currentIndex % lines.size]
-            
             prefs.edit().putInt("q_index", currentIndex + 1).apply()
             
             return question
@@ -74,24 +77,54 @@ class DecOmniService : AccessibilityService() {
         }
     }
 
-    // 🧠 MEMORY SYSTEM: Save Answer to Brain
+    // 🧠 THE NEW MEMORY SAVER (WITH X-RAY FALLBACK)
     private fun saveToMemory() {
         try {
+            val dir = getBrainDirectory()
+            val memFile = File(dir, "dec_knowledge.txt")
+
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clipData = clipboard.primaryClip
+
             if (clipData != null && clipData.itemCount > 0) {
-                val text = clipData.getItemAt(0).text?.toString() ?: return
-                
-                val dir = getBrainDirectory()
-                val memFile = File(dir, "dec_knowledge.txt")
-                
-                memFile.appendText("\n\n--- DEC LEARNED THIS ---\n$text")
-                
-                Toast.makeText(this, "🧠 KNOWLEDGE SAVED TO DOCUMENTS/DECBRAIN!", Toast.LENGTH_LONG).show()
+                // Method 1: Clipboard Success
+                val text = clipData.getItemAt(0).text?.toString() ?: ""
+                memFile.appendText("\n\n[COPIED FROM CLIPBOARD]\n$text")
+                Toast.makeText(this, "🧠 KNOWLEDGE SAVED!", Toast.LENGTH_LONG).show()
+            } else {
+                // Method 2: Clipboard Blocked! Use X-Ray Vision
+                val screenText = extractTextFromScreen(rootInActiveWindow)
+                if (screenText.isNotBlank()) {
+                    memFile.appendText("\n\n[READ FROM SCREEN X-RAY]\n$screenText")
+                    Toast.makeText(this, "👁️ SCREEN READ SAVED!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "❌ No text found on screen!", Toast.LENGTH_SHORT).show()
+                }
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "❌ Failed to save memory", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "❌ Save Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // 👁️ X-RAY VISION: Reads all long paragraphs on the screen
+    private fun extractTextFromScreen(root: AccessibilityNodeInfo?): String {
+        if (root == null) return ""
+        val sb = StringBuilder()
+        fun traverse(node: AccessibilityNodeInfo?) {
+            if (node == null) return
+            val text = node.text?.toString()
+            val desc = node.contentDescription?.toString()
+            
+            // Only grab text longer than 30 characters (ignores small buttons like "Send", "Copy")
+            if (!text.isNullOrBlank() && text.length > 30) {
+                sb.append(text).append("\n")
+            } else if (!desc.isNullOrBlank() && desc.length > 30) {
+                sb.append(desc).append("\n")
+            }
+            for (i in 0 until node.childCount) traverse(node.getChild(i))
+        }
+        traverse(root)
+        return sb.toString().trim()
     }
 
     private fun startPerfectChatLoop(textBox: AccessibilityNodeInfo) {
@@ -102,12 +135,8 @@ class DecOmniService : AccessibilityService() {
         }
 
         val dynamicQuestion = getNextQuestion()
-        
         val arguments = Bundle()
-        arguments.putCharSequence(
-            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
-            dynamicQuestion
-        )
+        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, dynamicQuestion)
         textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
         
         handler.postDelayed({
@@ -123,7 +152,6 @@ class DecOmniService : AccessibilityService() {
 
     private fun tryClickingSend(textBox: AccessibilityNodeInfo): Boolean {
         val root = rootInActiveWindow ?: return false
-        
         val sendBtn = findNodeByKeyword(root, "send")
         if (sendBtn != null) {
             if (sendBtn.isClickable) {
@@ -134,7 +162,6 @@ class DecOmniService : AccessibilityService() {
                 return true
             }
         }
-
         var parent = textBox.parent
         for (i in 0..2) {
             if (parent == null) break
@@ -165,7 +192,6 @@ class DecOmniService : AccessibilityService() {
             isProcessing = false
             return
         }
-
         if (attempts > 10) {
             pollForStopRespondingToDisappear()
             return
@@ -183,7 +209,6 @@ class DecOmniService : AccessibilityService() {
             isProcessing = false
             return
         }
-
         val stopBtn = findNodeByKeyword(rootInActiveWindow, "stop responding")
         if (stopBtn != null) {
             handler.postDelayed({ pollForStopRespondingToDisappear() }, 500)
@@ -196,15 +221,14 @@ class DecOmniService : AccessibilityService() {
                     } else if (copyBtn.parent?.isClickable == true) {
                         copyBtn.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }
-                    
-                    handler.postDelayed({
-                        saveToMemory()
-                        isProcessing = false
-                    }, 1000)
-                    
-                } else {
-                    isProcessing = false
                 }
+                
+                // ⚡ Wait 2 seconds to ensure Clipboard/Screen is ready, then Save!
+                handler.postDelayed({
+                    saveToMemory()
+                    isProcessing = false
+                }, 2000)
+                
             }, 1000)
         }
     }
