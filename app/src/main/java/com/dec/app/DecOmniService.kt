@@ -9,141 +9,115 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 
-// FIXED: Class name now exactly matches your file name!
 class DecOmniService : AccessibilityService() {
 
     private var isEngineActive = true
-    private var handler: Handler? = null
-
-    override fun onCreate() {
-        super.onCreate()
-        handler = Handler(Looper.getMainLooper())
-    }
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        showToast("Dec Omni-Engine is ONLINE")
+        // DIRECT TOAST: No handler, no applicationContext (Bypasses restrictions)
+        Toast.makeText(this, "🟢 DEC IS ONLINE & READY!", Toast.LENGTH_LONG).show()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Empty for now
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
-    override fun onInterrupt() {
-        showToast("Dec Engine Interrupted!")
-    }
+    override fun onInterrupt() {}
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
-        try {
-            if (event == null) return false
-            if (!isEngineActive) return super.onKeyEvent(event)
+        if (event == null) return false
+        if (!isEngineActive) return super.onKeyEvent(event)
 
-            val action = event.action
-            val keyCode = event.keyCode
+        val action = event.action
+        val keyCode = event.keyCode
 
-            if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && action == KeyEvent.ACTION_DOWN) {
-                isEngineActive = false
-                showToast("🚨 EMERGENCY STOP: Dec is sleeping.")
-                return true
-            }
-
-            if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && action == KeyEvent.ACTION_DOWN) {
-                showToast("Dec: Starting Perfect Chat Loop...")
-                startPerfectChatLoop()
-                return true
-            }
-
-            return super.onKeyEvent(event)
-        } catch (e: Exception) {
-            return false
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && action == KeyEvent.ACTION_DOWN) {
+            isEngineActive = false
+            Toast.makeText(this, "🚨 DEC SLEEPING", Toast.LENGTH_SHORT).show()
+            return true
         }
+
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && action == KeyEvent.ACTION_DOWN) {
+            Toast.makeText(this, "⚡ DEC: Action Triggered!", Toast.LENGTH_SHORT).show()
+            startPerfectChatLoop()
+            return true // Stops the real volume from increasing
+        }
+
+        return super.onKeyEvent(event)
     }
 
     private fun startPerfectChatLoop() {
-        try {
-            val root = rootInActiveWindow
-            if (root == null) {
-                showToast("Dec: Screen not ready!")
-                return
-            }
+        val root = rootInActiveWindow
+        if (root == null) {
+            Toast.makeText(this, "❌ Screen not ready!", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-            val textBox = findNodeByClass(root, "android.widget.EditText")
-            if (textBox != null) {
-                val arguments = Bundle()
-                arguments.putCharSequence(
-                    AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
-                    "Give me a 1-line technology fact."
-                )
-                textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
-                showToast("Dec: Typed message.")
-            } else {
-                showToast("Dec: Text box not found!")
-                return
-            }
-
-            handler?.postDelayed({
-                try {
-                    val currentRoot = rootInActiveWindow
-                    val sendBtn = findNodeByDesc(currentRoot, "Send")
-                    if (sendBtn != null) {
-                        sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        showToast("Dec: Pressed Send.")
-                        pollForStopRespondingToAppear(0)
-                    } else {
-                        showToast("Dec: Send button not found!")
-                    }
-                } catch (e: Exception) {}
+        val textBox = findNodeByClass(root, "android.widget.EditText")
+        if (textBox != null) {
+            val arguments = Bundle()
+            arguments.putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
+                "Give me a 1-line technology fact."
+            )
+            textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+            Toast.makeText(this, "✅ Typed message", Toast.LENGTH_SHORT).show()
+            
+            handler.postDelayed({
+                val currentRoot = rootInActiveWindow
+                val sendBtn = findNodeByDesc(currentRoot, "Send")
+                if (sendBtn != null) {
+                    sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    Toast.makeText(this, "✅ Pressed Send", Toast.LENGTH_SHORT).show()
+                    pollForStopRespondingToAppear(0)
+                } else {
+                    Toast.makeText(this, "❌ Send button not found", Toast.LENGTH_SHORT).show()
+                }
             }, 1000)
-        } catch (e: Exception) {}
+        } else {
+            Toast.makeText(this, "❌ Text box not found", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun pollForStopRespondingToAppear(attempts: Int) {
-        try {
-            if (attempts > 10) {
-                pollForStopRespondingToDisappear()
-                return
-            }
-            val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
-            if (stopBtn != null) {
-                showToast("Dec: Smart Wait (Claude is typing...)")
-                pollForStopRespondingToDisappear()
-            } else {
-                handler?.postDelayed({ pollForStopRespondingToAppear(attempts + 1) }, 500)
-            }
-        } catch (e: Exception) {}
+        if (attempts > 10) {
+            pollForStopRespondingToDisappear()
+            return
+        }
+        val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
+        if (stopBtn != null) {
+            Toast.makeText(this, "⏳ Smart Wait...", Toast.LENGTH_SHORT).show()
+            pollForStopRespondingToDisappear()
+        } else {
+            handler.postDelayed({ pollForStopRespondingToAppear(attempts + 1) }, 500)
+        }
     }
 
     private fun pollForStopRespondingToDisappear() {
-        try {
-            val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
-            if (stopBtn != null) {
-                handler?.postDelayed({ pollForStopRespondingToDisappear() }, 500)
-            } else {
-                handler?.postDelayed({
-                    try {
-                        showToast("Dec: Response complete! Stealing data...")
-                        val copyBtn = findLastNodeByDesc(rootInActiveWindow, "Copy message")
-                        if (copyBtn != null) {
-                            copyBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                            showToast("🧠 DEC LEARNED: Data Copied!")
-                        } else {
-                            showToast("Dec: Copy button not found!")
-                        }
-                    } catch (e: Exception) {}
-                }, 1000)
-            }
-        } catch (e: Exception) {}
+        val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
+        if (stopBtn != null) {
+            handler.postDelayed({ pollForStopRespondingToDisappear() }, 500)
+        } else {
+            handler.postDelayed({
+                Toast.makeText(this, "✅ Response complete!", Toast.LENGTH_SHORT).show()
+                val copyBtn = findLastNodeByDesc(rootInActiveWindow, "Copy message")
+                if (copyBtn != null) {
+                    copyBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    Toast.makeText(this, "🧠 DATA COPIED!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "❌ Copy button not found", Toast.LENGTH_SHORT).show()
+                }
+            }, 1000)
+        }
     }
 
     private fun findNodeByDesc(root: AccessibilityNodeInfo?, desc: String): AccessibilityNodeInfo? {
         if (root == null) return null
-        try {
-            if (root.contentDescription?.toString() == desc) return root
-            for (i in 0 until root.childCount) {
-                val result = findNodeByDesc(root.getChild(i), desc)
-                if (result != null) return result
-            }
-        } catch (e: Exception) {}
+        if (root.contentDescription?.toString() == desc) return root
+        for (i in 0 until root.childCount) {
+            val result = findNodeByDesc(root.getChild(i), desc)
+            if (result != null) return result
+        }
         return null
     }
 
@@ -152,10 +126,8 @@ class DecOmniService : AccessibilityService() {
         val matches = mutableListOf<AccessibilityNodeInfo>()
         fun search(node: AccessibilityNodeInfo?) {
             if (node == null) return
-            try {
-                if (node.contentDescription?.toString() == desc) matches.add(node)
-                for (i in 0 until node.childCount) search(node.getChild(i))
-            } catch (e: Exception) {}
+            if (node.contentDescription?.toString() == desc) matches.add(node)
+            for (i in 0 until node.childCount) search(node.getChild(i))
         }
         search(root)
         return matches.lastOrNull()
@@ -163,21 +135,11 @@ class DecOmniService : AccessibilityService() {
 
     private fun findNodeByClass(root: AccessibilityNodeInfo?, className: String): AccessibilityNodeInfo? {
         if (root == null) return null
-        try {
-            if (root.className?.toString() == className) return root
-            for (i in 0 until root.childCount) {
-                val result = findNodeByClass(root.getChild(i), className)
-                if (result != null) return result
-            }
-        } catch (e: Exception) {}
-        return null
-    }
-
-    private fun showToast(message: String) {
-        handler?.post {
-            try {
-                Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {}
+        if (root.className?.toString() == className) return root
+        for (i in 0 until root.childCount) {
+            val result = findNodeByClass(root.getChild(i), className)
+            if (result != null) return result
         }
+        return null
     }
 }
