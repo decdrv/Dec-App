@@ -24,7 +24,7 @@ class DecOmniService : AccessibilityService() {
     private var lastSavedText = ""
     
     // 🧠 THE LIVING BRAIN: Dec's current thought
-    private var currentThought = "Teach me a highly advanced concept about Artificial Intelligence or Physics. Explain it deeply. CRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical, advanced question I should ask you to dive deeper into this topic. Format the next question EXACTLY like this: [NEXT: your question here]"
+    private var currentThought = "Teach me a highly advanced concept about Artificial Intelligence. Explain it deeply. CRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical, advanced question I should ask you to dive deeper into this topic. Format the next question EXACTLY like this: [NEXT: your question here]"
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -60,23 +60,23 @@ class DecOmniService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    // 📂 CHANGED TO DOWNLOADS FOLDER (Easiest to access, least restricted)
     private fun getBrainDirectory(): File {
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DecBrain")
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DecBrain")
         if (!dir.exists()) dir.mkdirs()
-        val memFile = File(dir, "dec_knowledge.txt")
-        if (!memFile.exists()) memFile.writeText("--- DEC KNOWLEDGE VAULT ---\n")
         return dir
     }
 
-    // 🧠 EXTRACTS THE NEXT QUESTION FROM CLAUDE'S ANSWER
+    // 🧠 CREATES A NEW FILE FOR EVERY ANSWER!
     private fun processKnowledgeAndThink(text: String) {
         try {
             val dir = getBrainDirectory()
-            val memFile = File(dir, "dec_knowledge.txt")
-            val timeStamp = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(Date())
+            // Create a unique filename using the exact time (e.g., Dec_Thought_10_30_15_AM.txt)
+            val timeStamp = SimpleDateFormat("hh_mm_ss_a", Locale.getDefault()).format(Date())
+            val memFile = File(dir, "Dec_Thought_$timeStamp.txt")
 
-            // Save the knowledge
-            memFile.appendText("\n\n[LEARNED AT $timeStamp]\n$text")
+            // Write to a brand new file
+            memFile.writeText("[LEARNED AT $timeStamp]\n\n$text")
             lastSavedText = text
 
             // ⚡ THE MAGIC: Find the [NEXT: ...] tag
@@ -84,19 +84,19 @@ class DecOmniService : AccessibilityService() {
             if (startIndex != -1) {
                 val endIndex = text.indexOf("]", startIndex)
                 if (endIndex != -1) {
-                    // Extract the question and add the strict instruction again!
                     val extractedQuestion = text.substring(startIndex + 6, endIndex).trim()
                     currentThought = "$extractedQuestion\n\nCRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical question I should ask to dive deeper. Format it EXACTLY like this: [NEXT: your question here]"
-                    Toast.makeText(this, "🧠 DEC THOUGHT OF NEXT QUESTION!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "🧠 NEW FILE SAVED! Dec thought of next question!", Toast.LENGTH_SHORT).show()
                     return
                 }
             }
             
-            // Fallback if Claude forgets the format
             currentThought = "That was fascinating. Please explain another advanced aspect of this. Remember to end your response EXACTLY with [NEXT: your next question here]"
-            Toast.makeText(this, "⚠️ Format missed, using fallback thought.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "⚠️ NEW FILE SAVED! Format missed, using fallback.", Toast.LENGTH_SHORT).show()
 
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            Toast.makeText(this, "❌ File Error: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun saveToMemoryAndThink() {
@@ -115,6 +115,12 @@ class DecOmniService : AccessibilityService() {
 
         if (newText.isNotBlank() && newText != lastSavedText) {
             processKnowledgeAndThink(newText)
+        } else {
+            Toast.makeText(this, "⚠️ No new text found to save!", Toast.LENGTH_SHORT).show()
+            // Even if save fails, try to continue the loop
+            if (autoPilotActive) {
+                handler.postDelayed({ findTextBoxAndLoop() }, 3000)
+            }
         }
     }
 
@@ -234,7 +240,7 @@ class DecOmniService : AccessibilityService() {
                 }
                 
                 handler.postDelayed({
-                    saveToMemoryAndThink() // 🧠 READ, SAVE, AND GENERATE NEXT THOUGHT
+                    saveToMemoryAndThink() // 🧠 READ, SAVE TO NEW FILE, AND GENERATE NEXT THOUGHT
                     
                     if (autoPilotActive) {
                         Toast.makeText(this, "🔄 Dec is thinking...", Toast.LENGTH_SHORT).show()
