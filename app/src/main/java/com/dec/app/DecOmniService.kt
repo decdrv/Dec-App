@@ -1,16 +1,20 @@
 package com.dec.app
 
 import android.accessibilityservice.AccessibilityService
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
-import android.view.KeyEvent
-import android.widget.Toast
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.accessibilityservice.GestureDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.graphics.Path
+import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.view.KeyEvent
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Toast
+import android.app.SearchManager
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,81 +26,187 @@ class DecOmniService : AccessibilityService() {
     private var isProcessing = false
     private var autoPilotActive = false
     private var lastSavedText = ""
+    private var currentThought = ""
+    private var isFirstThought = true
     
-    // 🧠 THE LIVING BRAIN: Dec's current thought
-    private var currentThought = "Teach me a highly advanced concept about Artificial Intelligence. Explain it deeply. CRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical, advanced question I should ask you to dive deeper into this topic. Format the next question EXACTLY like this: [NEXT: your question here]"
+    // State Machine to track what Dec is currently doing
+    private var currentState = "CHATTING" // Can be: CHATTING, SEARCHING_WEB
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         getBrainDirectory()
-        Toast.makeText(this, "🟢 LIVING BRAIN ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "🌐 GOD-MODE OMNI-ENGINE ONLINE", Toast.LENGTH_LONG).show()
     }
 
     override fun onKeyEvent(event: KeyEvent?): Boolean {
         if (event != null && event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
             autoPilotActive = false
             isProcessing = false
-            Toast.makeText(this, "🛑 BRAIN ACTIVITY SUSPENDED!", Toast.LENGTH_LONG).show()
+            currentState = "CHATTING"
+            Toast.makeText(this, "🛑 EMERGENCY STOP ACTIVATED!", Toast.LENGTH_LONG).show()
             return true
         }
         return super.onKeyEvent(event)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || isProcessing) return
-
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
-            val node = event.source ?: return
-            val text = node.text?.toString() ?: ""
-
-            if (text.trim().lowercase() == "..dec") {
-                isProcessing = true
-                autoPilotActive = true
-                Toast.makeText(this, "⚡ CURIOSITY ENGINE ENGAGED!", Toast.LENGTH_LONG).show()
-                startPerfectChatLoop(node)
+        if (event == null || !autoPilotActive && !isProcessing) {
+            // Trigger to start the engine
+            if (event?.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+                val node = event.source ?: return
+                val text = node.text?.toString() ?: ""
+                if (text.trim().lowercase() == "..dec") {
+                    startGodMode(node)
+                }
             }
+            return
         }
     }
 
     override fun onInterrupt() {}
 
-    // 📂 CHANGED TO DOWNLOADS FOLDER (Easiest to access, least restricted)
     private fun getBrainDirectory(): File {
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "DecBrain")
         if (!dir.exists()) dir.mkdirs()
         return dir
     }
 
-    // 🧠 CREATES A NEW FILE FOR EVERY ANSWER!
+    private fun startGodMode(textBox: AccessibilityNodeInfo) {
+        isProcessing = true
+        autoPilotActive = true
+        
+        if (isFirstThought) {
+            val prefs = getSharedPreferences("DecPrefs", Context.MODE_PRIVATE)
+            val topic = prefs.getString("custom_topic", "Latest Technology News") ?: "Latest Technology News"
+            
+            currentThought = """
+                You are DEC, an autonomous AI agent with INTERNET ACCESS.
+                Mission: Master the topic "$topic".
+                
+                You can command me (the Android system) to do things.
+                If you know the answer, teach me and end with:
+                [MEMORY: <dense summary>]
+                [NEXT_PROMPT: <next question>]
+                
+                If you NEED live internet data, command me to search the web by ending EXACTLY with:
+                [ACTION: SEARCH_WEB: <your search query>]
+            """.trimIndent()
+            isFirstThought = false
+        }
+        
+        Toast.makeText(this, "⚡ GOD-MODE ENGAGED!", Toast.LENGTH_LONG).show()
+        startPerfectChatLoop(textBox)
+    }
+
+    // 🧠 THE MASTER PARSER (Understands Memory, Prompts, and Actions)
     private fun processKnowledgeAndThink(text: String) {
         try {
             val dir = getBrainDirectory()
-            // Create a unique filename using the exact time (e.g., Dec_Thought_10_30_15_AM.txt)
             val timeStamp = SimpleDateFormat("hh_mm_ss_a", Locale.getDefault()).format(Date())
-            val memFile = File(dir, "Dec_Thought_$timeStamp.txt")
+            val memFile = File(dir, "Dec_Memory_$timeStamp.txt")
 
-            // Write to a brand new file
-            memFile.writeText("[LEARNED AT $timeStamp]\n\n$text")
-            lastSavedText = text
-
-            // ⚡ THE MAGIC: Find the [NEXT: ...] tag
-            val startIndex = text.indexOf("[NEXT:")
-            if (startIndex != -1) {
-                val endIndex = text.indexOf("]", startIndex)
-                if (endIndex != -1) {
-                    val extractedQuestion = text.substring(startIndex + 6, endIndex).trim()
-                    currentThought = "$extractedQuestion\n\nCRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical question I should ask to dive deeper. Format it EXACTLY like this: [NEXT: your question here]"
-                    Toast.makeText(this, "🧠 NEW FILE SAVED! Dec thought of next question!", Toast.LENGTH_SHORT).show()
-                    return
+            // 1. Extract Memory
+            val memStart = text.indexOf("[MEMORY:")
+            if (memStart != -1) {
+                val memEnd = text.indexOf("]", memStart)
+                if (memEnd != -1) {
+                    val memoryToSave = text.substring(memStart + 8, memEnd).trim()
+                    memFile.writeText("[LOGGED AT $timeStamp]\n\n$memoryToSave")
                 }
             }
-            
-            currentThought = "That was fascinating. Please explain another advanced aspect of this. Remember to end your response EXACTLY with [NEXT: your next question here]"
-            Toast.makeText(this, "⚠️ NEW FILE SAVED! Format missed, using fallback.", Toast.LENGTH_SHORT).show()
+            lastSavedText = text
 
-        } catch (e: Exception) {
-            Toast.makeText(this, "❌ File Error: ${e.message}", Toast.LENGTH_LONG).show()
-        }
+            // 2. Check for Web Search Action
+            val actionStart = text.indexOf("[ACTION: SEARCH_WEB:")
+            if (actionStart != -1) {
+                val actionEnd = text.indexOf("]", actionStart)
+                if (actionEnd != -1) {
+                    val query = text.substring(actionStart + 20, actionEnd).trim()
+                    executeWebSearch(query)
+                    return // Stop chat loop, we are going to the web!
+                }
+            }
+
+            // 3. Extract Next Prompt
+            val promptStart = text.indexOf("[NEXT_PROMPT:")
+            if (promptStart != -1) {
+                val promptEnd = text.indexOf("]", promptStart)
+                if (promptEnd != -1) {
+                    val nextPrompt = text.substring(promptStart + 13, promptEnd).trim()
+                    currentThought = "$nextPrompt\n\nRemember: End with [MEMORY: ...] and [NEXT_PROMPT: ...] OR [ACTION: SEARCH_WEB: ...]"
+                    Toast.makeText(this, "🧠 Thinking next thought...", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                currentThought = "Continue explaining. Remember your command formats."
+            }
+
+        } catch (e: Exception) {}
+    }
+
+    // 🌐 THE WEB SURFER: Opens Google Search automatically
+    private fun executeWebSearch(query: String) {
+        Toast.makeText(this, "🌐 SEARCHING WEB: $query", Toast.LENGTH_LONG).show()
+        currentState = "SEARCHING_WEB"
+        
+        // Launch Android's built-in Web Search Intent
+        val intent = Intent(Intent.ACTION_WEB_SEARCH)
+        intent.putExtra(SearchManager.QUERY, query)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+
+        // Wait 6 seconds for results to load, then scrape and go back!
+        handler.postDelayed({
+            scrapeWebAndReturn()
+        }, 6000)
+    }
+
+    // 🕷️ THE SCRAPER & NAVIGATOR: Reads web, presses BACK button
+    private fun scrapeWebAndReturn() {
+        if (!autoPilotActive) return
+        
+        Toast.makeText(this, "👁️ SCRAPING WEB DATA...", Toast.LENGTH_SHORT).show()
+        
+        // Scroll down slightly to get more text (Human-like gesture)
+        performScroll()
+        
+        handler.postDelayed({
+            val webData = extractTextFromScreen(rootInActiveWindow)
+            
+            // Press the GLOBAL BACK BUTTON to return to Claude!
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            Toast.makeText(this, "🔙 RETURNING TO CLAUDE...", Toast.LENGTH_SHORT).show()
+            
+            currentState = "CHATTING"
+            
+            // Feed the scraped data back to Claude
+            currentThought = """
+                I searched the web. Here is the raw data I found:
+                ---
+                ${webData.take(1500)} // Taking first 1500 chars to avoid limits
+                ---
+                Analyze this data, teach me what you learned, and end with [MEMORY: ...] and [NEXT_PROMPT: ...]
+            """.trimIndent()
+            
+            // Wait 3 seconds for Claude to reopen, then type
+            handler.postDelayed({ findTextBoxAndLoop() }, 3000)
+            
+        }, 2000) // Wait 2 seconds after scroll
+    }
+
+    // 👆 THE SWIPER: Simulates a human finger swiping up (scrolling down)
+    private fun performScroll() {
+        val displayMetrics = resources.displayMetrics
+        val middleX = displayMetrics.widthPixels / 2f
+        val startY = displayMetrics.heightPixels * 0.8f // Start near bottom
+        val endY = displayMetrics.heightPixels * 0.2f   // Swipe to top
+
+        val path = Path()
+        path.moveTo(middleX, startY)
+        path.lineTo(middleX, endY)
+
+        val gestureBuilder = GestureDescription.Builder()
+        gestureBuilder.addStroke(GestureDescription.StrokeDescription(path, 0, 500)) // 500ms swipe
+        dispatchGesture(gestureBuilder.build(), null, null)
     }
 
     private fun saveToMemoryAndThink() {
@@ -115,12 +225,10 @@ class DecOmniService : AccessibilityService() {
 
         if (newText.isNotBlank() && newText != lastSavedText) {
             processKnowledgeAndThink(newText)
-        } else {
-            Toast.makeText(this, "⚠️ No new text found to save!", Toast.LENGTH_SHORT).show()
-            // Even if save fails, try to continue the loop
-            if (autoPilotActive) {
-                handler.postDelayed({ findTextBoxAndLoop() }, 3000)
-            }
+        }
+        
+        if (autoPilotActive && currentState == "CHATTING") {
+            handler.postDelayed({ findTextBoxAndLoop() }, 3000)
         }
     }
 
@@ -131,8 +239,8 @@ class DecOmniService : AccessibilityService() {
             if (node == null) return
             val text = node.text?.toString()
             val desc = node.contentDescription?.toString()
-            if (!text.isNullOrBlank() && text.length > 30) sb.append(text).append("\n")
-            else if (!desc.isNullOrBlank() && desc.length > 30) sb.append(desc).append("\n")
+            if (!text.isNullOrBlank() && text.length > 20) sb.append(text).append("\n")
+            else if (!desc.isNullOrBlank() && desc.length > 20) sb.append(desc).append("\n")
             for (i in 0 until node.childCount) traverse(node.getChild(i))
         }
         traverse(root)
@@ -141,13 +249,6 @@ class DecOmniService : AccessibilityService() {
 
     private fun startPerfectChatLoop(textBox: AccessibilityNodeInfo) {
         if (!autoPilotActive) return
-
-        if (checkLimitReached()) {
-            Toast.makeText(this, "🛑 LIMIT REACHED! Brain sleeping.", Toast.LENGTH_LONG).show()
-            autoPilotActive = false
-            isProcessing = false
-            return
-        }
 
         val arguments = Bundle()
         arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, currentThought)
@@ -193,20 +294,8 @@ class DecOmniService : AccessibilityService() {
         return false
     }
 
-    private fun checkLimitReached(): Boolean {
-        val root = rootInActiveWindow ?: return false
-        val limit1 = findNodeByKeyword(root, "out of messages")
-        val limit2 = findNodeByKeyword(root, "upgrade to pro")
-        val limit3 = findNodeByKeyword(root, "limit reached")
-        return limit1 != null || limit2 != null || limit3 != null
-    }
-
     private fun pollForStopRespondingToAppear(attempts: Int) {
-        if (!autoPilotActive || checkLimitReached()) {
-            autoPilotActive = false
-            isProcessing = false
-            return
-        }
+        if (!autoPilotActive) return
         if (attempts > 10) {
             pollForStopRespondingToDisappear()
             return
@@ -220,11 +309,7 @@ class DecOmniService : AccessibilityService() {
     }
 
     private fun pollForStopRespondingToDisappear() {
-        if (!autoPilotActive || checkLimitReached()) {
-            autoPilotActive = false
-            isProcessing = false
-            return
-        }
+        if (!autoPilotActive) return
         val stopBtn = findNodeByKeyword(rootInActiveWindow, "stop responding")
         if (stopBtn != null) {
             handler.postDelayed({ pollForStopRespondingToDisappear() }, 500)
@@ -240,14 +325,7 @@ class DecOmniService : AccessibilityService() {
                 }
                 
                 handler.postDelayed({
-                    saveToMemoryAndThink() // 🧠 READ, SAVE TO NEW FILE, AND GENERATE NEXT THOUGHT
-                    
-                    if (autoPilotActive) {
-                        Toast.makeText(this, "🔄 Dec is thinking...", Toast.LENGTH_SHORT).show()
-                        handler.postDelayed({ findTextBoxAndLoop() }, 3000)
-                    } else {
-                        isProcessing = false
-                    }
+                    saveToMemoryAndThink()
                 }, 2000)
                 
             }, 1000)
