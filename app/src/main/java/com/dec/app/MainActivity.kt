@@ -13,6 +13,9 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import android.util.Log
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 
 /**
  * MainActivity: The Control Panel for the Dec Omni-Engine.
@@ -22,8 +25,12 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("MainActivity", "onCreate: Activity created.")
 
         val mContext = this
+        
+        // Check Accessibility Service status on app launch
+        checkAccessibilityServiceStatus()
         
         // 🎨 HACKER THEME UI
         val layout = LinearLayout(mContext).apply {
@@ -92,11 +99,13 @@ class MainActivity : Activity() {
 
         // 🖱️ ACTIONS
         accBtn.setOnClickListener {
+            Log.d("MainActivity", "ENABLE CORE SERVICE button clicked.")
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             showMsg("Enable 'Dec Omni-Engine' in Accessibility Settings")
         }
 
         startBtn.setOnClickListener {
+            Log.d("MainActivity", "INITIALIZE AGENT button clicked.")
             val topic = topicInput.text.toString()
             if (topic.isNotBlank()) {
                 val prefs = getSharedPreferences("DecPrefs", Context.MODE_PRIVATE)
@@ -109,21 +118,54 @@ class MainActivity : Activity() {
                     val launchIntent = packageManager.getLaunchIntentForPackage("com.anthropic.claude")
                     if (launchIntent != null) {
                         startActivity(launchIntent)
+                        Log.i("MainActivity", "Attempting to launch Claude app.")
                     } else {
                         showMsg("Claude app not found. Launching Browser...")
                         val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://claude.ai"))
                         startActivity(browserIntent)
+                        Log.w("MainActivity", "Claude app not found, launching browser to claude.ai.")
                     }
                 } catch (e: Exception) {
                     showMsg("Launch failed. Open your AI app manually.")
+                    Log.e("MainActivity", "Failed to launch Claude or browser: ${e.message}")
                 }
             } else {
                 showMsg("❌ Mission requires a Topic!")
+                Log.w("MainActivity", "Mission initialization failed: Topic is blank.")
             }
         }
     }
 
     private fun showMsg(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        Log.d("MainActivity", "Toast message shown: $message")
+    }
+
+    private fun checkAccessibilityServiceStatus() {
+        val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        var isServiceEnabled = false
+        for (service in enabledServices) {
+            if (service.resolveInfo.serviceInfo.packageName == packageName &&
+                service.resolveInfo.serviceInfo.name == DecOmniService::class.java.name) {
+                isServiceEnabled = true
+                break
+            }
+        }
+
+        if (!isServiceEnabled) {
+            showMsg("⚠️ DEC Omni-Engine Accessibility Service is NOT enabled. Please enable it in settings.")
+            Log.w("MainActivity", "Accessibility Service is not enabled.")
+            // Optionally, automatically open settings
+            // startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        } else {
+            Log.i("MainActivity", "Accessibility Service is enabled.")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d("MainActivity", "onResume: Activity resumed.")
+        checkAccessibilityServiceStatus()
     }
 }
