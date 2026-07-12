@@ -2,28 +2,23 @@ package com.dec.app
 
 import android.app.Activity
 import android.os.Bundle
-import android.widget.Toast
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.ExistingPeriodicWorkPolicy
-import java.util.concurrent.TimeUnit
+import android.widget.TextView
+import android.graphics.Color
+import android.view.Gravity
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 1. Tell Dec to wake up automatically every 15 minutes forever
-        val workRequest = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).build()
+        // Creating a simple screen without any XML files to prevent crashes!
+        val textView = TextView(this)
+        textView.text = "🤖 DEC IS ALIVE!\n\n1. Go to Phone Settings\n2. Open Accessibility\n3. Turn ON Dec\n4. Open Claude & Press Volume UP"
+        textView.textSize = 20f
+        textView.setTextColor(Color.BLACK)
+        textView.setBackgroundColor(Color.WHITE)
+        textView.gravity = Gravity.CENTER
+        textView.setPadding(50, 50, 50, 50)
         
-        // 2. Register this automatic loop deep inside the Android system
-        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
-            "DecAutoSync",
-            ExistingPeriodicWorkPolicy.KEEP,
-            workRequest
-        )
-        
-        // 3. Show a message and hide the screen
-        Toast.makeText(this, "Dec Auto-Engine is now running forever!", Toast.LENGTH_LONG).show()
-        finish()
+        setContentView(textView)
     }
 }
