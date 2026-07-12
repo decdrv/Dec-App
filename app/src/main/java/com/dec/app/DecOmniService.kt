@@ -11,27 +11,24 @@ import android.os.Looper
 class DecOmniService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private var isProcessing = false // Prevents double-triggering
+    private var isProcessing = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         Toast.makeText(this, "🟢 GHOST PROTOCOL ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
     }
 
-    // ⚡ THE EXTREME ADVANCE TRIGGER: No Buttons, Just Screen Reading!
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || isProcessing) return
 
-        // Listen to what is being typed on the screen
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
             val node = event.source ?: return
             val text = node.text?.toString() ?: ""
 
-            // THE MAGIC WORD: If user types "..dec"
             if (text.trim().lowercase() == "..dec") {
                 isProcessing = true
                 Toast.makeText(this, "⚡ DEC AWAKENED!", Toast.LENGTH_SHORT).show()
-                startPerfectChatLoop(node) // Pass the text box directly!
+                startPerfectChatLoop(node)
             }
         }
     }
@@ -39,7 +36,6 @@ class DecOmniService : AccessibilityService() {
     override fun onInterrupt() {}
 
     private fun startPerfectChatLoop(textBox: AccessibilityNodeInfo) {
-        // STEP 1: Overwrite "..dec" with the real command
         val arguments = Bundle()
         arguments.putCharSequence(
             AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
@@ -47,16 +43,66 @@ class DecOmniService : AccessibilityService() {
         )
         textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
         
-        // STEP 2: Wait 1 second, then press Send
         handler.postDelayed({
-            val sendBtn = findNodeByDesc(rootInActiveWindow, "Send")
-            if (sendBtn != null) {
-                sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            val clicked = tryClickingSend(textBox)
+            if (clicked) {
+                Toast.makeText(this, "✅ Pressed Send (Smart Click)", Toast.LENGTH_SHORT).show()
                 pollForStopRespondingToAppear(0)
             } else {
-                isProcessing = false // Reset if failed
+                Toast.makeText(this, "❌ Send button hidden!", Toast.LENGTH_SHORT).show()
+                isProcessing = false // Reset so you can try again
             }
         }, 1000)
+    }
+
+    // ⚡ THE SMART CLICKER: Bypasses Claude & ChatGPT Security
+    private fun tryClickingSend(textBox: AccessibilityNodeInfo): Boolean {
+        val root = rootInActiveWindow ?: return false
+        
+        // Method 1: Search by Keyword (Handles "Send message", "send", etc.)
+        val sendBtn = findNodeByKeyword(root, "send")
+        if (sendBtn != null) {
+            if (sendBtn.isClickable) {
+                sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                return true
+            } else if (sendBtn.parent?.isClickable == true) {
+                sendBtn.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                return true
+            }
+        }
+
+        // Method 2: Structural Hack (Finds the clickable button next to the text box)
+        var parent = textBox.parent
+        for (i in 0..2) { // Look up to 3 levels deep in the container
+            if (parent == null) break
+            for (j in 0 until parent.childCount) {
+                val sibling = parent.getChild(j)
+                if (sibling != null && sibling != textBox) {
+                    if (sibling.isClickable) {
+                        sibling.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        return true
+                    }
+                }
+            }
+            parent = parent.parent
+        }
+        
+        return false
+    }
+
+    // 🔍 UPGRADED SCANNER: Case-insensitive and partial matches
+    private fun findNodeByKeyword(root: AccessibilityNodeInfo?, keyword: String): AccessibilityNodeInfo? {
+        if (root == null) return null
+        val desc = root.contentDescription?.toString()?.lowercase() ?: ""
+        val text = root.text?.toString()?.lowercase() ?: ""
+        
+        if (desc.contains(keyword) || text.contains(keyword)) return root
+        
+        for (i in 0 until root.childCount) {
+            val result = findNodeByKeyword(root.getChild(i), keyword)
+            if (result != null) return result
+        }
+        return null
     }
 
     private fun pollForStopRespondingToAppear(attempts: Int) {
@@ -64,7 +110,7 @@ class DecOmniService : AccessibilityService() {
             pollForStopRespondingToDisappear()
             return
         }
-        val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
+        val stopBtn = findNodeByKeyword(rootInActiveWindow, "stop responding")
         if (stopBtn != null) {
             pollForStopRespondingToDisappear()
         } else {
@@ -73,37 +119,33 @@ class DecOmniService : AccessibilityService() {
     }
 
     private fun pollForStopRespondingToDisappear() {
-        val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
+        val stopBtn = findNodeByKeyword(rootInActiveWindow, "stop responding")
         if (stopBtn != null) {
             handler.postDelayed({ pollForStopRespondingToDisappear() }, 500)
         } else {
             handler.postDelayed({
-                val copyBtn = findLastNodeByDesc(rootInActiveWindow, "Copy message")
+                val copyBtn = findLastNodeByKeyword(rootInActiveWindow, "copy")
                 if (copyBtn != null) {
-                    copyBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    if (copyBtn.isClickable) {
+                        copyBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    } else if (copyBtn.parent?.isClickable == true) {
+                        copyBtn.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }
                     Toast.makeText(this, "🧠 DATA COPIED!", Toast.LENGTH_LONG).show()
                 }
-                isProcessing = false // Loop Complete, ready for next time!
+                isProcessing = false
             }, 1000)
         }
     }
 
-    private fun findNodeByDesc(root: AccessibilityNodeInfo?, desc: String): AccessibilityNodeInfo? {
-        if (root == null) return null
-        if (root.contentDescription?.toString() == desc) return root
-        for (i in 0 until root.childCount) {
-            val result = findNodeByDesc(root.getChild(i), desc)
-            if (result != null) return result
-        }
-        return null
-    }
-
-    private fun findLastNodeByDesc(root: AccessibilityNodeInfo?, desc: String): AccessibilityNodeInfo? {
+    private fun findLastNodeByKeyword(root: AccessibilityNodeInfo?, keyword: String): AccessibilityNodeInfo? {
         if (root == null) return null
         val matches = mutableListOf<AccessibilityNodeInfo>()
         fun search(node: AccessibilityNodeInfo?) {
             if (node == null) return
-            if (node.contentDescription?.toString() == desc) matches.add(node)
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val text = node.text?.toString()?.lowercase() ?: ""
+            if (desc.contains(keyword) || text.contains(keyword)) matches.add(node)
             for (i in 0 until node.childCount) search(node.getChild(i))
         }
         search(root)
