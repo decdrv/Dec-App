@@ -2,12 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.dec.app">
 
+    <!-- STORAGE PERMISSIONS FOR DEC BRAIN -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
     <application
         android:allowBackup="true"
         android:label="Dec"
         android:supportsRtl="true">
 
-        <!-- 1. MAIN ACTIVITY (This makes the App open successfully) -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -17,7 +20,6 @@
             </intent-filter>
         </activity>
 
-        <!-- 2. ACCESSIBILITY SERVICE (The Brain & Hands) -->
         <service
             android:name=".DecOmniService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
