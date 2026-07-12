@@ -3,7 +3,6 @@ package com.dec.app
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.view.KeyEvent
 import android.widget.Toast
 import android.os.Bundle
 import android.os.Handler
@@ -11,72 +10,53 @@ import android.os.Looper
 
 class DecOmniService : AccessibilityService() {
 
-    private var isEngineActive = true
     private val handler = Handler(Looper.getMainLooper())
+    private var isProcessing = false // Prevents double-triggering
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // DIRECT TOAST: No handler, no applicationContext (Bypasses restrictions)
-        Toast.makeText(this, "🟢 DEC IS ONLINE & READY!", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "🟢 GHOST PROTOCOL ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    // ⚡ THE EXTREME ADVANCE TRIGGER: No Buttons, Just Screen Reading!
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || isProcessing) return
+
+        // Listen to what is being typed on the screen
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            val node = event.source ?: return
+            val text = node.text?.toString() ?: ""
+
+            // THE MAGIC WORD: If user types "..dec"
+            if (text.trim().lowercase() == "..dec") {
+                isProcessing = true
+                Toast.makeText(this, "⚡ DEC AWAKENED!", Toast.LENGTH_SHORT).show()
+                startPerfectChatLoop(node) // Pass the text box directly!
+            }
+        }
+    }
 
     override fun onInterrupt() {}
 
-    override fun onKeyEvent(event: KeyEvent?): Boolean {
-        if (event == null) return false
-        if (!isEngineActive) return super.onKeyEvent(event)
-
-        val action = event.action
-        val keyCode = event.keyCode
-
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && action == KeyEvent.ACTION_DOWN) {
-            isEngineActive = false
-            Toast.makeText(this, "🚨 DEC SLEEPING", Toast.LENGTH_SHORT).show()
-            return true
-        }
-
-        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && action == KeyEvent.ACTION_DOWN) {
-            Toast.makeText(this, "⚡ DEC: Action Triggered!", Toast.LENGTH_SHORT).show()
-            startPerfectChatLoop()
-            return true // Stops the real volume from increasing
-        }
-
-        return super.onKeyEvent(event)
-    }
-
-    private fun startPerfectChatLoop() {
-        val root = rootInActiveWindow
-        if (root == null) {
-            Toast.makeText(this, "❌ Screen not ready!", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val textBox = findNodeByClass(root, "android.widget.EditText")
-        if (textBox != null) {
-            val arguments = Bundle()
-            arguments.putCharSequence(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
-                "Give me a 1-line technology fact."
-            )
-            textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
-            Toast.makeText(this, "✅ Typed message", Toast.LENGTH_SHORT).show()
-            
-            handler.postDelayed({
-                val currentRoot = rootInActiveWindow
-                val sendBtn = findNodeByDesc(currentRoot, "Send")
-                if (sendBtn != null) {
-                    sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    Toast.makeText(this, "✅ Pressed Send", Toast.LENGTH_SHORT).show()
-                    pollForStopRespondingToAppear(0)
-                } else {
-                    Toast.makeText(this, "❌ Send button not found", Toast.LENGTH_SHORT).show()
-                }
-            }, 1000)
-        } else {
-            Toast.makeText(this, "❌ Text box not found", Toast.LENGTH_SHORT).show()
-        }
+    private fun startPerfectChatLoop(textBox: AccessibilityNodeInfo) {
+        // STEP 1: Overwrite "..dec" with the real command
+        val arguments = Bundle()
+        arguments.putCharSequence(
+            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, 
+            "Give me a 1-line technology fact."
+        )
+        textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+        
+        // STEP 2: Wait 1 second, then press Send
+        handler.postDelayed({
+            val sendBtn = findNodeByDesc(rootInActiveWindow, "Send")
+            if (sendBtn != null) {
+                sendBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                pollForStopRespondingToAppear(0)
+            } else {
+                isProcessing = false // Reset if failed
+            }
+        }, 1000)
     }
 
     private fun pollForStopRespondingToAppear(attempts: Int) {
@@ -86,7 +66,6 @@ class DecOmniService : AccessibilityService() {
         }
         val stopBtn = findNodeByDesc(rootInActiveWindow, "Stop responding")
         if (stopBtn != null) {
-            Toast.makeText(this, "⏳ Smart Wait...", Toast.LENGTH_SHORT).show()
             pollForStopRespondingToDisappear()
         } else {
             handler.postDelayed({ pollForStopRespondingToAppear(attempts + 1) }, 500)
@@ -99,14 +78,12 @@ class DecOmniService : AccessibilityService() {
             handler.postDelayed({ pollForStopRespondingToDisappear() }, 500)
         } else {
             handler.postDelayed({
-                Toast.makeText(this, "✅ Response complete!", Toast.LENGTH_SHORT).show()
                 val copyBtn = findLastNodeByDesc(rootInActiveWindow, "Copy message")
                 if (copyBtn != null) {
                     copyBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     Toast.makeText(this, "🧠 DATA COPIED!", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "❌ Copy button not found", Toast.LENGTH_SHORT).show()
                 }
+                isProcessing = false // Loop Complete, ready for next time!
             }, 1000)
         }
     }
@@ -131,15 +108,5 @@ class DecOmniService : AccessibilityService() {
         }
         search(root)
         return matches.lastOrNull()
-    }
-
-    private fun findNodeByClass(root: AccessibilityNodeInfo?, className: String): AccessibilityNodeInfo? {
-        if (root == null) return null
-        if (root.className?.toString() == className) return root
-        for (i in 0 until root.childCount) {
-            val result = findNodeByClass(root.getChild(i), className)
-            if (result != null) return result
-        }
-        return null
     }
 }
