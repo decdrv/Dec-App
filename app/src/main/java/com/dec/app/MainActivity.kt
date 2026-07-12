@@ -79,10 +79,10 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(layout)
 
-        // 🖱️ BUTTON ACTIONS
+        // 🖱️ BUTTON ACTIONS (Fixed 'this' to 'this@MainActivity')
         accBtn.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "Turn ON Dec Omni-Engine", Toast.LENGTH_LONG).show()
+            Toast.makeText(this@MainActivity, "Turn ON Dec Omni-Engine", Toast.LENGTH_LONG).show()
         }
 
         startBtn.setOnClickListener {
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences("DecPrefs", MODE_PRIVATE)
                 prefs.edit().putString("custom_topic", topic).apply()
                 
-                Toast.makeText(this, "🔥 TOPIC LOCKED! Open Claude to begin.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "🔥 TOPIC LOCKED! Open Claude to begin.", Toast.LENGTH_LONG).show()
                 
                 // Automatically open Claude App
                 try {
@@ -100,13 +100,13 @@ class MainActivity : AppCompatActivity() {
                     if (launchIntent != null) {
                         startActivity(launchIntent)
                     } else {
-                        Toast.makeText(this, "Claude app not found! Open it manually.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "Claude app not found! Open it manually.", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(this, "Open Claude manually.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Open Claude manually.", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "❌ Please enter a topic first!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "❌ Please enter a topic first!", Toast.LENGTH_SHORT).show()
             }
         }
     }
