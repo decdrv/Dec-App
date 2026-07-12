@@ -14,6 +14,7 @@ import android.view.Gravity
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -80,10 +81,10 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(layout)
 
-        // 🖱️ BUTTON ACTIONS (Using applicationContext to prevent compiler confusion)
+        // 🖱️ BUTTON ACTIONS (Using our custom safe function)
         accBtn.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(applicationContext, "Turn ON Dec Omni-Engine", Toast.LENGTH_LONG).show()
+            showMsg("Turn ON Dec Omni-Engine")
         }
 
         startBtn.setOnClickListener {
@@ -93,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences("DecPrefs", Context.MODE_PRIVATE)
                 prefs.edit().putString("custom_topic", topic).apply()
                 
-                Toast.makeText(applicationContext, "🔥 TOPIC LOCKED! Open Claude to begin.", Toast.LENGTH_LONG).show()
+                showMsg("🔥 TOPIC LOCKED! Open Claude to begin.")
                 
                 // Automatically open Claude App
                 try {
@@ -101,14 +102,19 @@ class MainActivity : AppCompatActivity() {
                     if (launchIntent != null) {
                         startActivity(launchIntent)
                     } else {
-                        Toast.makeText(applicationContext, "Claude app not found! Open it manually.", Toast.LENGTH_SHORT).show()
+                        showMsg("Claude app not found! Open it manually.")
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(applicationContext, "Open Claude manually.", Toast.LENGTH_SHORT).show()
+                    showMsg("Open Claude manually.")
                 }
             } else {
-                Toast.makeText(applicationContext, "❌ Please enter a topic first!", Toast.LENGTH_SHORT).show()
+                showMsg("❌ Please enter a topic first!")
             }
         }
+    }
+
+    // 💡 THE BULLETPROOF FIX: A separate function outside the buttons to handle Toasts safely!
+    private fun showMsg(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 }
