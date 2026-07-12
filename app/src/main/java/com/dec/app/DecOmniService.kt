@@ -3,6 +3,7 @@ package com.dec.app
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.KeyEvent
 import android.widget.Toast
 import android.os.Bundle
 import android.os.Handler
@@ -19,12 +20,26 @@ class DecOmniService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var isProcessing = false
-    private var lastSavedText = "" // Prevents saving the exact same thing twice
+    private var autoPilotActive = false
+    private var lastSavedText = ""
+    
+    // 🧠 THE LIVING BRAIN: Dec's current thought
+    private var currentThought = "Teach me a highly advanced concept about Artificial Intelligence or Physics. Explain it deeply. CRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical, advanced question I should ask you to dive deeper into this topic. Format the next question EXACTLY like this: [NEXT: your question here]"
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         getBrainDirectory()
-        Toast.makeText(this, "🟢 DEC BRAIN ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "🟢 LIVING BRAIN ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
+    }
+
+    override fun onKeyEvent(event: KeyEvent?): Boolean {
+        if (event != null && event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+            autoPilotActive = false
+            isProcessing = false
+            Toast.makeText(this, "🛑 BRAIN ACTIVITY SUSPENDED!", Toast.LENGTH_LONG).show()
+            return true
+        }
+        return super.onKeyEvent(event)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -36,7 +51,8 @@ class DecOmniService : AccessibilityService() {
 
             if (text.trim().lowercase() == "..dec") {
                 isProcessing = true
-                Toast.makeText(this, "⚡ DEC AWAKENED!", Toast.LENGTH_SHORT).show()
+                autoPilotActive = true
+                Toast.makeText(this, "⚡ CURIOSITY ENGINE ENGAGED!", Toast.LENGTH_LONG).show()
                 startPerfectChatLoop(node)
             }
         }
@@ -47,71 +63,58 @@ class DecOmniService : AccessibilityService() {
     private fun getBrainDirectory(): File {
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DecBrain")
         if (!dir.exists()) dir.mkdirs()
-
         val memFile = File(dir, "dec_knowledge.txt")
         if (!memFile.exists()) memFile.writeText("--- DEC KNOWLEDGE VAULT ---\n")
-
         return dir
     }
 
-    private fun getNextQuestion(): String {
-        try {
-            val dir = getBrainDirectory()
-            val qFile = File(dir, "dec_questions.txt")
-            
-            if (!qFile.exists()) {
-                qFile.writeText("Explain quantum computing in 1 simple sentence.\nWhat is the future of AI?\nGive me a unique startup idea.\nHow does a black hole work?")
-            }
-            
-            val lines = qFile.readLines().filter { it.isNotBlank() }
-            if (lines.isEmpty()) return "Tell me a random technology fact."
-            
-            val prefs = getSharedPreferences("DecPrefs", Context.MODE_PRIVATE)
-            val currentIndex = prefs.getInt("q_index", 0)
-            
-            val question = lines[currentIndex % lines.size]
-            prefs.edit().putInt("q_index", currentIndex + 1).apply()
-            
-            return question
-        } catch (e: Exception) {
-            return "Tell me a random fact."
-        }
-    }
-
-    // 🧠 UPGRADED MEMORY SAVER (With Timestamps & Duplicate Check)
-    private fun saveToMemory() {
+    // 🧠 EXTRACTS THE NEXT QUESTION FROM CLAUDE'S ANSWER
+    private fun processKnowledgeAndThink(text: String) {
         try {
             val dir = getBrainDirectory()
             val memFile = File(dir, "dec_knowledge.txt")
             val timeStamp = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(Date())
 
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clipData = clipboard.primaryClip
-            var newText = ""
+            // Save the knowledge
+            memFile.appendText("\n\n[LEARNED AT $timeStamp]\n$text")
+            lastSavedText = text
 
-            // Try getting text from Clipboard
-            if (clipData != null && clipData.itemCount > 0) {
-                newText = clipData.getItemAt(0).text?.toString() ?: ""
-            }
-
-            // If Clipboard is empty or has old data, use X-Ray Vision
-            if (newText.isBlank() || newText == lastSavedText) {
-                val screenText = extractTextFromScreen(rootInActiveWindow)
-                if (screenText.isNotBlank()) {
-                    newText = screenText
+            // ⚡ THE MAGIC: Find the [NEXT: ...] tag
+            val startIndex = text.indexOf("[NEXT:")
+            if (startIndex != -1) {
+                val endIndex = text.indexOf("]", startIndex)
+                if (endIndex != -1) {
+                    // Extract the question and add the strict instruction again!
+                    val extractedQuestion = text.substring(startIndex + 6, endIndex).trim()
+                    currentThought = "$extractedQuestion\n\nCRITICAL INSTRUCTION: At the very end of your response, you MUST generate the next logical question I should ask to dive deeper. Format it EXACTLY like this: [NEXT: your question here]"
+                    Toast.makeText(this, "🧠 DEC THOUGHT OF NEXT QUESTION!", Toast.LENGTH_SHORT).show()
+                    return
                 }
             }
+            
+            // Fallback if Claude forgets the format
+            currentThought = "That was fascinating. Please explain another advanced aspect of this. Remember to end your response EXACTLY with [NEXT: your next question here]"
+            Toast.makeText(this, "⚠️ Format missed, using fallback thought.", Toast.LENGTH_SHORT).show()
 
-            // Save only if we have text AND it's not a duplicate
-            if (newText.isNotBlank() && newText != lastSavedText) {
-                memFile.appendText("\n\n[SAVED AT $timeStamp]\n$newText")
-                lastSavedText = newText // Update memory
-                Toast.makeText(this, "🧠 SAVED AT $timeStamp!", Toast.LENGTH_LONG).show()
-            } else {
-                Toast.makeText(this, "⚠️ No new data found to save!", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            Toast.makeText(this, "❌ Save Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {}
+    }
+
+    private fun saveToMemoryAndThink() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipData = clipboard.primaryClip
+        var newText = ""
+
+        if (clipData != null && clipData.itemCount > 0) {
+            newText = clipData.getItemAt(0).text?.toString() ?: ""
+        }
+
+        if (newText.isBlank() || newText == lastSavedText) {
+            val screenText = extractTextFromScreen(rootInActiveWindow)
+            if (screenText.isNotBlank()) newText = screenText
+        }
+
+        if (newText.isNotBlank() && newText != lastSavedText) {
+            processKnowledgeAndThink(newText)
         }
     }
 
@@ -122,12 +125,8 @@ class DecOmniService : AccessibilityService() {
             if (node == null) return
             val text = node.text?.toString()
             val desc = node.contentDescription?.toString()
-            
-            if (!text.isNullOrBlank() && text.length > 30) {
-                sb.append(text).append("\n")
-            } else if (!desc.isNullOrBlank() && desc.length > 30) {
-                sb.append(desc).append("\n")
-            }
+            if (!text.isNullOrBlank() && text.length > 30) sb.append(text).append("\n")
+            else if (!desc.isNullOrBlank() && desc.length > 30) sb.append(desc).append("\n")
             for (i in 0 until node.childCount) traverse(node.getChild(i))
         }
         traverse(root)
@@ -135,15 +134,17 @@ class DecOmniService : AccessibilityService() {
     }
 
     private fun startPerfectChatLoop(textBox: AccessibilityNodeInfo) {
+        if (!autoPilotActive) return
+
         if (checkLimitReached()) {
-            Toast.makeText(this, "🛑 LIMIT REACHED! Dec is sleeping.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "🛑 LIMIT REACHED! Brain sleeping.", Toast.LENGTH_LONG).show()
+            autoPilotActive = false
             isProcessing = false
             return
         }
 
-        val dynamicQuestion = getNextQuestion()
         val arguments = Bundle()
-        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, dynamicQuestion)
+        arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, currentThought)
         textBox.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
         
         handler.postDelayed({
@@ -151,7 +152,7 @@ class DecOmniService : AccessibilityService() {
             if (clicked) {
                 pollForStopRespondingToAppear(0)
             } else {
-                Toast.makeText(this, "❌ Send button hidden!", Toast.LENGTH_SHORT).show()
+                autoPilotActive = false
                 isProcessing = false
             }
         }, 1000)
@@ -195,7 +196,8 @@ class DecOmniService : AccessibilityService() {
     }
 
     private fun pollForStopRespondingToAppear(attempts: Int) {
-        if (checkLimitReached()) {
+        if (!autoPilotActive || checkLimitReached()) {
+            autoPilotActive = false
             isProcessing = false
             return
         }
@@ -212,7 +214,8 @@ class DecOmniService : AccessibilityService() {
     }
 
     private fun pollForStopRespondingToDisappear() {
-        if (checkLimitReached()) {
+        if (!autoPilotActive || checkLimitReached()) {
+            autoPilotActive = false
             isProcessing = false
             return
         }
@@ -230,14 +233,46 @@ class DecOmniService : AccessibilityService() {
                     }
                 }
                 
-                // ⚡ Wait 2 seconds to ensure Clipboard is updated, then Save!
                 handler.postDelayed({
-                    saveToMemory()
-                    isProcessing = false
+                    saveToMemoryAndThink() // 🧠 READ, SAVE, AND GENERATE NEXT THOUGHT
+                    
+                    if (autoPilotActive) {
+                        Toast.makeText(this, "🔄 Dec is thinking...", Toast.LENGTH_SHORT).show()
+                        handler.postDelayed({ findTextBoxAndLoop() }, 3000)
+                    } else {
+                        isProcessing = false
+                    }
                 }, 2000)
                 
             }, 1000)
         }
+    }
+
+    private fun findTextBoxAndLoop() {
+        if (!autoPilotActive) return
+        val root = rootInActiveWindow
+        if (root != null) {
+            val textBox = findNodeByClass(root, "android.widget.EditText")
+            if (textBox != null) {
+                startPerfectChatLoop(textBox)
+            } else {
+                autoPilotActive = false
+                isProcessing = false
+            }
+        } else {
+            autoPilotActive = false
+            isProcessing = false
+        }
+    }
+
+    private fun findNodeByClass(root: AccessibilityNodeInfo?, className: String): AccessibilityNodeInfo? {
+        if (root == null) return null
+        if (root.className?.toString() == className) return root
+        for (i in 0 until root.childCount) {
+            val result = findNodeByClass(root.getChild(i), className)
+            if (result != null) return result
+        }
+        return null
     }
 
     private fun findNodeByKeyword(root: AccessibilityNodeInfo?, keyword: String): AccessibilityNodeInfo? {
