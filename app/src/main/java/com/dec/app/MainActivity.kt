@@ -16,15 +16,18 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 💡 THE FIX: Save the context in a variable so the compiler never gets confused!
+        val mContext = this 
+
         // 🎨 HACKER THEME UI (Programmatic Layout)
-        val layout = LinearLayout(this)
+        val layout = LinearLayout(mContext)
         layout.orientation = LinearLayout.VERTICAL
         layout.setPadding(50, 100, 50, 50)
         layout.setBackgroundColor(Color.parseColor("#0D0D0D")) // Deep Black
         layout.gravity = Gravity.CENTER_HORIZONTAL
 
         // 🟢 TITLE
-        val title = TextView(this)
+        val title = TextView(mContext)
         title.text = "DEC OMNI-ENGINE"
         title.textSize = 28f
         title.setTextColor(Color.parseColor("#00FF00")) // Hacker Green
@@ -33,7 +36,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(title)
 
         // ⚪ SUBTITLE
-        val subtitle = TextView(this)
+        val subtitle = TextView(mContext)
         subtitle.text = "Autonomous AI Parasite\nStatus: ONLINE"
         subtitle.textSize = 14f
         subtitle.setTextColor(Color.LTGRAY)
@@ -42,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(subtitle)
 
         // 📝 TOPIC INPUT BOX
-        val topicInput = EditText(this)
+        val topicInput = EditText(mContext)
         topicInput.hint = "Enter Topic (e.g. Quantum Physics, Hacking)"
         topicInput.setHintTextColor(Color.DKGRAY)
         topicInput.setTextColor(Color.WHITE)
@@ -51,7 +54,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(topicInput)
 
         // 🚀 START BUTTON
-        val startBtn = Button(this)
+        val startBtn = Button(mContext)
         startBtn.text = "INITIALIZE AUTO-PILOT"
         startBtn.setBackgroundColor(Color.parseColor("#00FF00"))
         startBtn.setTextColor(Color.BLACK)
@@ -65,7 +68,7 @@ class MainActivity : AppCompatActivity() {
         layout.addView(startBtn)
 
         // ⚙️ SETTINGS BUTTON
-        val accBtn = Button(this)
+        val accBtn = Button(mContext)
         accBtn.text = "ENABLE DEC SERVICE"
         accBtn.setBackgroundColor(Color.parseColor("#333333"))
         accBtn.setTextColor(Color.WHITE)
@@ -79,10 +82,10 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(layout)
 
-        // 🖱️ BUTTON ACTIONS (Fixed 'this' to 'this@MainActivity')
+        // 🖱️ BUTTON ACTIONS (Using mContext)
         accBtn.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this@MainActivity, "Turn ON Dec Omni-Engine", Toast.LENGTH_LONG).show()
+            Toast.makeText(mContext, "Turn ON Dec Omni-Engine", Toast.LENGTH_LONG).show()
         }
 
         startBtn.setOnClickListener {
@@ -92,7 +95,7 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences("DecPrefs", MODE_PRIVATE)
                 prefs.edit().putString("custom_topic", topic).apply()
                 
-                Toast.makeText(this@MainActivity, "🔥 TOPIC LOCKED! Open Claude to begin.", Toast.LENGTH_LONG).show()
+                Toast.makeText(mContext, "🔥 TOPIC LOCKED! Open Claude to begin.", Toast.LENGTH_LONG).show()
                 
                 // Automatically open Claude App
                 try {
@@ -100,13 +103,13 @@ class MainActivity : AppCompatActivity() {
                     if (launchIntent != null) {
                         startActivity(launchIntent)
                     } else {
-                        Toast.makeText(this@MainActivity, "Claude app not found! Open it manually.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(mContext, "Claude app not found! Open it manually.", Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(this@MainActivity, "Open Claude manually.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(mContext, "Open Claude manually.", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this@MainActivity, "❌ Please enter a topic first!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(mContext, "❌ Please enter a topic first!", Toast.LENGTH_SHORT).show()
             }
         }
     }
