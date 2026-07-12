@@ -11,15 +11,18 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Environment
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class DecOmniService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var isProcessing = false
+    private var lastSavedText = "" // Prevents saving the exact same thing twice
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // Force create both files as soon as Dec starts!
         getBrainDirectory()
         Toast.makeText(this, "🟢 DEC BRAIN ONLINE (Type ..dec)", Toast.LENGTH_LONG).show()
     }
@@ -41,12 +44,10 @@ class DecOmniService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
-    // 📂 DIRECTORY & FILE INITIALIZATION
     private fun getBrainDirectory(): File {
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DecBrain")
         if (!dir.exists()) dir.mkdirs()
 
-        // Force create knowledge file so it's always visible to you
         val memFile = File(dir, "dec_knowledge.txt")
         if (!memFile.exists()) memFile.writeText("--- DEC KNOWLEDGE VAULT ---\n")
 
@@ -77,36 +78,43 @@ class DecOmniService : AccessibilityService() {
         }
     }
 
-    // 🧠 THE NEW MEMORY SAVER (WITH X-RAY FALLBACK)
+    // 🧠 UPGRADED MEMORY SAVER (With Timestamps & Duplicate Check)
     private fun saveToMemory() {
         try {
             val dir = getBrainDirectory()
             val memFile = File(dir, "dec_knowledge.txt")
+            val timeStamp = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(Date())
 
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clipData = clipboard.primaryClip
+            var newText = ""
 
+            // Try getting text from Clipboard
             if (clipData != null && clipData.itemCount > 0) {
-                // Method 1: Clipboard Success
-                val text = clipData.getItemAt(0).text?.toString() ?: ""
-                memFile.appendText("\n\n[COPIED FROM CLIPBOARD]\n$text")
-                Toast.makeText(this, "🧠 KNOWLEDGE SAVED!", Toast.LENGTH_LONG).show()
-            } else {
-                // Method 2: Clipboard Blocked! Use X-Ray Vision
+                newText = clipData.getItemAt(0).text?.toString() ?: ""
+            }
+
+            // If Clipboard is empty or has old data, use X-Ray Vision
+            if (newText.isBlank() || newText == lastSavedText) {
                 val screenText = extractTextFromScreen(rootInActiveWindow)
                 if (screenText.isNotBlank()) {
-                    memFile.appendText("\n\n[READ FROM SCREEN X-RAY]\n$screenText")
-                    Toast.makeText(this, "👁️ SCREEN READ SAVED!", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "❌ No text found on screen!", Toast.LENGTH_SHORT).show()
+                    newText = screenText
                 }
+            }
+
+            // Save only if we have text AND it's not a duplicate
+            if (newText.isNotBlank() && newText != lastSavedText) {
+                memFile.appendText("\n\n[SAVED AT $timeStamp]\n$newText")
+                lastSavedText = newText // Update memory
+                Toast.makeText(this, "🧠 SAVED AT $timeStamp!", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this, "⚠️ No new data found to save!", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Toast.makeText(this, "❌ Save Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 👁️ X-RAY VISION: Reads all long paragraphs on the screen
     private fun extractTextFromScreen(root: AccessibilityNodeInfo?): String {
         if (root == null) return ""
         val sb = StringBuilder()
@@ -115,7 +123,6 @@ class DecOmniService : AccessibilityService() {
             val text = node.text?.toString()
             val desc = node.contentDescription?.toString()
             
-            // Only grab text longer than 30 characters (ignores small buttons like "Send", "Copy")
             if (!text.isNullOrBlank() && text.length > 30) {
                 sb.append(text).append("\n")
             } else if (!desc.isNullOrBlank() && desc.length > 30) {
@@ -223,7 +230,7 @@ class DecOmniService : AccessibilityService() {
                     }
                 }
                 
-                // ⚡ Wait 2 seconds to ensure Clipboard/Screen is ready, then Save!
+                // ⚡ Wait 2 seconds to ensure Clipboard is updated, then Save!
                 handler.postDelayed({
                     saveToMemory()
                     isProcessing = false
