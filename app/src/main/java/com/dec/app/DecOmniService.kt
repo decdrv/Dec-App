@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.content.ClipboardManager
 import android.content.Context
+import android.os.Environment
 import java.io.File
 
 class DecOmniService : AccessibilityService() {
@@ -38,13 +39,21 @@ class DecOmniService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
+    // 📂 NEW: Creates a visible folder in Documents
+    private fun getBrainDirectory(): File {
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "DecBrain")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir
+    }
+
     // 🧠 MEMORY SYSTEM: Get Next Question
     private fun getNextQuestion(): String {
         try {
-            val dir = getExternalFilesDir(null)
+            val dir = getBrainDirectory()
             val qFile = File(dir, "dec_questions.txt")
             
-            // If file doesn't exist, create it with default questions
             if (!qFile.exists()) {
                 qFile.writeText("Explain quantum computing in 1 simple sentence.\nWhat is the future of AI?\nGive me a unique startup idea.\nHow does a black hole work?")
             }
@@ -57,12 +66,11 @@ class DecOmniService : AccessibilityService() {
             
             val question = lines[currentIndex % lines.size]
             
-            // Move to next question for next time
             prefs.edit().putInt("q_index", currentIndex + 1).apply()
             
             return question
         } catch (e: Exception) {
-            return "Tell me a random fact." // Fallback
+            return "Tell me a random fact."
         }
     }
 
@@ -74,13 +82,12 @@ class DecOmniService : AccessibilityService() {
             if (clipData != null && clipData.itemCount > 0) {
                 val text = clipData.getItemAt(0).text?.toString() ?: return
                 
-                val dir = getExternalFilesDir(null)
+                val dir = getBrainDirectory()
                 val memFile = File(dir, "dec_knowledge.txt")
                 
-                // Append new knowledge
                 memFile.appendText("\n\n--- DEC LEARNED THIS ---\n$text")
                 
-                Toast.makeText(this, "🧠 KNOWLEDGE SAVED TO MEMORY!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "🧠 KNOWLEDGE SAVED TO DOCUMENTS/DECBRAIN!", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             Toast.makeText(this, "❌ Failed to save memory", Toast.LENGTH_SHORT).show()
@@ -94,7 +101,6 @@ class DecOmniService : AccessibilityService() {
             return
         }
 
-        // ⚡ GET DYNAMIC QUESTION
         val dynamicQuestion = getNextQuestion()
         
         val arguments = Bundle()
@@ -191,7 +197,6 @@ class DecOmniService : AccessibilityService() {
                         copyBtn.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     }
                     
-                    // ⚡ WAIT 1 SEC FOR CLIPBOARD, THEN SAVE TO MEMORY
                     handler.postDelayed({
                         saveToMemory()
                         isProcessing = false
